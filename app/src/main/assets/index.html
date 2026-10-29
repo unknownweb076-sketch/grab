@@ -60,6 +60,13 @@ h3{margin:26px 4px 10px;font-size:12px;color:var(--mut);font-weight:600;letter-s
 .job[data-s=done] .ico{background:rgba(75,227,154,.15);color:var(--ok);animation:tick .5s cubic-bezier(.3,1.6,.5,1)}
 .job[data-s=error] .ico{background:rgba(255,107,122,.15);color:var(--err)}
 @keyframes tick{from{transform:scale(.4)}to{transform:scale(1)}}
+.acc{display:flex;gap:10px;animation:rise .6s .15s both}
+.chip{flex:1;border:1px solid var(--line);background:var(--card);color:#eef0f6;border-radius:14px;padding:12px;font-size:14px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:8px;transition:transform .15s,border-color .25s}
+.chip:active{transform:scale(.96)}
+.chip i{width:8px;height:8px;border-radius:50%;background:#555;transition:background .3s,box-shadow .3s}
+.chip.on{border-color:rgba(75,227,154,.5)}
+.chip.on i{background:var(--ok);box-shadow:0 0 10px var(--ok)}
+.hint{font-size:12px;color:#6b7188;margin:8px 4px 0}
 .empty{text-align:center;color:#6b7188;font-size:14px;padding:30px 0;animation:rise .6s .2s both}
 </style></head><body>
 <div class="blob b1"></div><div class="blob b2"></div>
@@ -73,6 +80,12 @@ h3{margin:26px 4px 10px;font-size:12px;color:var(--mut);font-weight:600;letter-s
   <button class="go" id="go">Download</button>
   <div class="auto"><span>Auto-download on paste</span><button class="sw" id="sw"></button></div>
 </div>
+<h3>Accounts</h3>
+<div class="acc">
+  <button class="chip" id="acc-youtube"><i></i>YouTube</button>
+  <button class="chip" id="acc-instagram"><i></i>Instagram</button>
+</div>
+<div class="hint">Sign in once to fix "Please sign in" errors. Hold a chip to sign out.</div>
 <h3>Downloads</h3>
 <div id="list"></div>
 <div class="empty" id="empty">Nothing yet &#10024;<br>Paste a link above to start</div>
@@ -129,6 +142,21 @@ function onJob(j){
   }
 }
 window.onJob=onJob;
+
+function refreshLogin(){
+  ['youtube','instagram'].forEach(s=>{
+    let on=false;try{on=Android.hasLogin(s)}catch(e){}
+    $('acc-'+s).classList.toggle('on',on);
+  });
+}
+['youtube','instagram'].forEach(s=>{
+  const b=$('acc-'+s);let timer=null,long=false;
+  b.addEventListener('touchstart',()=>{long=false;timer=setTimeout(()=>{long=true;try{Android.logout(s)}catch(e){}refreshLogin()},700)},{passive:true});
+  b.addEventListener('touchend',()=>clearTimeout(timer));
+  b.addEventListener('touchmove',()=>clearTimeout(timer),{passive:true});
+  b.addEventListener('click',()=>{if(long){long=false;return}try{Android.login(s)}catch(e){}});
+});
+window.refreshLogin=refreshLogin;refreshLogin();
 
 const iv=setInterval(()=>{
   try{if(Android.isReady()){$('sub').textContent="Paste a link. That's it.";clearInterval(iv)}}catch(e){}

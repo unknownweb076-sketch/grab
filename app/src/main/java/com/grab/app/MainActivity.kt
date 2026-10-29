@@ -10,6 +10,7 @@ import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
 import android.view.View
+import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
 import android.webkit.MimeTypeMap
 import android.webkit.WebResourceRequest
@@ -60,6 +61,11 @@ class MainActivity : Activity() {
         handleIntent(intent)
     }
 
+    override fun onResume() {
+        super.onResume()
+        if (pageLoaded) web.evaluateJavascript("refreshLogin()", null)
+    }
+
     private fun handleIntent(i: Intent?) {
         if (i?.action == Intent.ACTION_SEND) {
             val t = i.getStringExtra(Intent.EXTRA_TEXT)
@@ -100,6 +106,24 @@ class MainActivity : Activity() {
 
         @JavascriptInterface
         fun isReady(): Boolean = GrabApp.ready.count == 0L
+
+        @JavascriptInterface
+        fun login(site: String) {
+            runOnUiThread {
+                startActivity(
+                    Intent(this@MainActivity, CookieActivity::class.java).putExtra("site", site)
+                )
+            }
+        }
+
+        @JavascriptInterface
+        fun hasLogin(site: String): Boolean = File(filesDir, "cookies_$site.txt").exists()
+
+        @JavascriptInterface
+        fun logout(site: String) {
+            File(filesDir, "cookies_$site.txt").delete()
+            runOnUiThread { CookieManager.getInstance().removeAllCookies(null) }
+        }
     }
 
     private fun push(id: Int, state: String, pct: Float, msg: String, title: String = "") {
@@ -115,6 +139,7 @@ class MainActivity : Activity() {
     private fun runJob(id: Int, url: String, mode: String) {
         var title = ""
         val dir = File(getExternalFilesDir(null), "jobs/$id")
+        val cj = File(cacheDir, "cookies_$id.txt")
         try {
             push(id, "running", 0f, "Getting ready...")
             GrabApp.ready.await()
@@ -126,6 +151,16 @@ class MainActivity : Activity() {
             val req = YoutubeDLRequest(url)
             req.addOption("--no-playlist")
             req.addOption("--no-mtime")
+
+            // use saved logins (YouTube / Instagram) if the user signed in
+            val parts = listOf("youtube", "instagram")
+                .map { File(filesDir, "cookies_$it.txt") }
+                .filter { it.exists() }
+            if (parts.isNotEmpty()) {
+                cj.writeText("# Netscape HTTP Cookie File\n" + parts.joinToString("\n") { it.readText() })
+                req.addOption("--cookies", cj.absolutePath)
+            }
+
             req.addOption("-o", dir.absolutePath + "/%(title).150B.%(ext)s")
             if (mode == "audio") {
                 req.addOption("-x")
@@ -172,6 +207,7 @@ class MainActivity : Activity() {
             push(id, "error", 0f, err.take(140))
         } finally {
             dir.deleteRecursively()
+            cj.delete()
         }
     }
 
